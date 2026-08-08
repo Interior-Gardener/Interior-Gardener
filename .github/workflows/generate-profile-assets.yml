@@ -47,27 +47,46 @@ jobs:
           # Wait for server to become ready (max 15 seconds)
           timeout 15 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:9000/api)" != "200" ]]; do sleep 1; done'
           
-          # Return to root and prepare output directory
+          # Return to root
           cd ..
-          mkdir -p dist
+          
+          # Fix permissions from previous Docker actions and ensure dist exists
+          sudo mkdir -p dist
+          sudo chown -R $USER:$USER dist
           
           echo "Fetching Stats SVG..."
-          curl -s -f "http://localhost:9000/api?username=${{ github.repository_owner }}&show_icons=true&count_private=true&include_all_commits=true&hide_rank=true&hide_border=true&title_color=22D3EE&icon_color=A78BFA&text_color=94A3B8&bg_color=0A101F&card_width=500" -o dist/stats.svg
+          # Fetch with -f (fail on HTTP error), -sS (silent but show errors)
+          if ! curl -f -sS "http://localhost:9000/api?username=${{ github.repository_owner }}&show_icons=true&count_private=true&include_all_commits=true&hide_rank=true&hide_border=true&title_color=22D3EE&icon_color=A78BFA&text_color=94A3B8&bg_color=0A101F&card_width=500" -o dist/stats.svg; then
+            echo "Error: curl failed to download stats.svg"
+            exit 1
+          fi
           
           echo "Fetching Top Languages SVG..."
-          curl -s -f "http://localhost:9000/api/top-langs/?username=${{ github.repository_owner }}&layout=compact&langs_count=8&hide_border=true&title_color=22D3EE&text_color=94A3B8&bg_color=0A101F&card_width=500" -o dist/top-langs.svg
+          if ! curl -f -sS "http://localhost:9000/api/top-langs/?username=${{ github.repository_owner }}&layout=compact&langs_count=8&hide_border=true&title_color=22D3EE&text_color=94A3B8&bg_color=0A101F&card_width=500" -o dist/top-langs.svg; then
+            echo "Error: curl failed to download top-langs.svg"
+            exit 1
+          fi
 
           echo "Validating generated SVGs..."
-          if grep -q "Something went wrong" dist/stats.svg dist/top-langs.svg; then
-            echo "Error: github-readme-stats generated an error SVG instead of valid stats."
-            echo "This usually means the GitHub user does not exist or the STATS_TOKEN is invalid/missing."
-            exit 1
-          fi
-
-          if [ ! -s dist/stats.svg ] || [ ! -s dist/top-langs.svg ]; then
-            echo "Error: Generated SVGs are empty."
-            exit 1
-          fi
+          for file in dist/stats.svg dist/top-langs.svg; do
+            if [ ! -s "$file" ]; then
+              echo "Error: $file is empty."
+              exit 1
+            fi
+            
+            if grep -q "Something went wrong" "$file"; then
+              echo "Error: github-readme-stats generated an error SVG in $file."
+              echo "This usually means the GitHub user does not exist or the STATS_TOKEN is invalid/missing."
+              exit 1
+            fi
+            
+            echo "File size for $file:"
+            ls -lh "$file"
+            
+            echo "First 5 lines of $file:"
+            head -n 5 "$file"
+            echo "----------------------------------------"
+          done
           
           echo "Static assets successfully generated."
         env:
