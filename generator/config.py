@@ -7,7 +7,7 @@ NAME = "Kartik Verma"
 GITHUB_USERNAME = "Interior-Gardener"
 
 # ---------- Assets ----------
-PORTRAIT_FILE = "portrait.jpeg"
+PORTRAIT_FILE = "portrait_final.png"
 
 REACT_LOGO_FILE = "react-logo.webp"
 NODE_LOGO_FILE = "node-logo.webp"
