@@ -39,10 +39,10 @@ BANNER_OUTPUT = OUTPUT_DIR / "banner.svg"
 OUTPUT_SIZE = (420, 520)
 
 # Dot size in the final SVG.
-DOT_RADIUS = 1.25
+DOT_RADIUS = 0.9
 
 # Spacing between dots.
-DOT_SPACING = 3
+DOT_SPACING = 2
 
 # Dithering threshold.
 DITHER_THRESHOLD = 128
@@ -430,6 +430,16 @@ def compose_banner(portrait_pts, portrait_width, portrait_height):
 
     # We will build the SVG contents step-by-step for a technical, modern look.
     
+    # Text helper function for right-side dotted lines
+    def format_row(label, value, y_offset, color=config.UI_DARK, val_color="#ffffff"):
+        # We need a fixed width for the label so the dots line up.
+        # But SVG text doesn't auto-wrap or fill dots. We'll use monospace for the label.
+        dots = "." * max(2, (18 - len(label)))
+        return f'''
+        <text x="500" y="{y_offset}" class="mono label">{label} {dots}</text>
+        <text x="680" y="{y_offset}" class="mono value" fill="{val_color}">{value}</text>
+        '''
+
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">
     <defs>
         <linearGradient id="portraitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -437,93 +447,100 @@ def compose_banner(portrait_pts, portrait_width, portrait_height):
             <stop offset="100%" stop-color="{config.PORTRAIT_DARK}" />
         </linearGradient>
         
-        <linearGradient id="uiGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="{config.UI_LIGHT}" />
-            <stop offset="100%" stop-color="{config.UI_DARK}" />
-        </linearGradient>
-
-        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1"/>
-        </pattern>
-        
-        <circle id="traveller" cx="0" cy="0" r="{DOT_RADIUS * 1.3:.2f}" fill="url(#portraitGrad)" />
+        <circle id="traveller" cx="0" cy="0" r="{DOT_RADIUS * 1.5:.2f}" fill="{config.PORTRAIT_LIGHT}" />
         
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap');
-            .name {{
-                font-family: 'Inter', system-ui, sans-serif;
-                font-size: 72px;
-                font-weight: 900;
-                fill: #ffffff;
-                letter-spacing: -2px;
-            }}
-            .role {{
-                font-family: 'Inter', system-ui, sans-serif;
-                font-size: 32px;
-                font-weight: 500;
-                fill: url(#uiGrad);
-                letter-spacing: -0.5px;
-            }}
-            .status {{
-                font-family: 'Inter', system-ui, sans-serif;
-                font-size: 18px;
-                font-weight: 300;
-                fill: #94A3B8;
-                letter-spacing: 0px;
-            }}
-            .section-title {{
+            @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
+            text {{
                 font-family: 'JetBrains Mono', monospace;
-                font-size: 13px;
-                font-weight: 700;
-                fill: {config.ACCENT};
-                text-transform: uppercase;
-                letter-spacing: 2px;
             }}
-            .tech-text {{
+            .mono {{
                 font-family: 'JetBrains Mono', monospace;
                 font-size: 14px;
-                font-weight: 400;
-                fill: #CBD5E1;
             }}
-            .decorative-line {{
-                stroke: {config.ACCENT};
-                stroke-width: 2;
-                stroke-dasharray: 4 4;
+            .label {{
+                fill: {config.UI_LIGHT};
+            }}
+            .value {{
+                font-weight: 700;
+            }}
+            .title {{
+                font-size: 12px;
+                fill: #4B5563;
+                letter-spacing: 2px;
+            }}
+            .top-bar-text {{
+                font-size: 12px;
+                fill: #6B7280;
+            }}
+            .accent-bg {{
+                fill: {config.PORTRAIT_LIGHT};
+            }}
+            .accent-text {{
+                fill: #ffffff;
+                font-weight: 700;
+                font-size: 12px;
             }}
         </style>
     </defs>
 
-    <!-- Background -->
-    <rect width="100%" height="100%" fill="{config.BACKGROUND}" />
-    <rect width="100%" height="100%" fill="url(#grid)" />
+    <!-- Background Frame -->
+    <rect x="0" y="0" width="{w}" height="{h}" fill="#050914" />
+    <rect x="2" y="2" width="{w-4}" height="{h-4}" rx="8" fill="#060b13" stroke="{config.UI_DARK}" stroke-width="1.5" />
 
-    <!-- Technical Decorative Elements -->
-    <circle cx="80" cy="80" r="4" fill="{config.ACCENT}" />
-    <line x1="80" y1="80" x2="80" y2="120" class="decorative-line" />
-    <path d="M 80 120 L 100 140 L 140 140" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+    <!-- Top Bar macOS dots -->
+    <circle cx="24" cy="24" r="6" fill="#FF5F56" />
+    <circle cx="44" cy="24" r="6" fill="#FFBD2E" />
+    <circle cx="64" cy="24" r="6" fill="#27C93F" />
 
-    <!-- Typography Content -->
-    <g transform="translate(80, 240)">
-        <text x="0" y="0" class="name">{config.NAME}</text>
-        <text x="0" y="50" class="role">{config.ROLE}</text>
-        <text x="0" y="90" class="status">{config.STATUS}</text>
-    </g>
+    <!-- Top Bar Text -->
+    <text x="{w/2}" y="28" class="top-bar-text" text-anchor="middle">{config.EMAIL} - % ./profile.sh --live</text>
+
+    <!-- Visual Map (Left side) -->
+    <text x="40" y="80" class="title">VISUAL.MAP</text>
     
-    <g transform="translate(80, 420)">
-        <text x="0" y="0" class="section-title">01 // TOOLCHAIN</text>
-        <text x="0" y="30" class="tech-text">{config.TOOLCHAIN}</text>
-        
-        <text x="0" y="70" class="section-title">02 // LANGUAGES</text>
-        <text x="0" y="100" class="tech-text">{config.LANGUAGES}</text>
-    </g>
+    <!-- Framing brackets for portrait -->
+    <path d="M 40 100 L 40 90 L 50 90" fill="none" stroke="{config.UI_LIGHT}" stroke-width="2" />
+    <path d="M {40 + portrait_width} 90 L {40 + portrait_width + 10} 90 L {40 + portrait_width + 10} 100" fill="none" stroke="{config.UI_LIGHT}" stroke-width="2" />
+    <path d="M 40 {90 + portrait_height} L 40 {90 + portrait_height + 10} L 50 {90 + portrait_height + 10}" fill="none" stroke="{config.UI_LIGHT}" stroke-width="2" />
+    <path d="M {40 + portrait_width} {90 + portrait_height + 10} L {40 + portrait_width + 10} {90 + portrait_height + 10} L {40 + portrait_width + 10} {90 + portrait_height}" fill="none" stroke="{config.UI_LIGHT}" stroke-width="2" />
+
+    <rect x="35" y="85" width="{portrait_width + 15}" height="{portrait_height + 15}" fill="none" stroke="{config.UI_DARK}" stroke-width="1" opacity="0.3" />
+
+    <!-- System Info (Right side) -->
+    <text x="500" y="100" class="title">SYSTEM.INFO</text>
+    <text x="{w - 40}" y="100" class="title" text-anchor="end" fill="#EF4444">• LIVE</text>
     
-    <g transform="translate(600, 420)">
-        <text x="0" y="0" class="section-title">03 // INFRA</text>
-        <text x="0" y="30" class="tech-text">{config.INFRA}</text>
-    </g>
+    <!-- Highlighted Email block -->
+    <rect x="500" y="115" width="280" height="24" rx="4" class="accent-bg" />
+    <text x="510" y="132" class="accent-text">{config.EMAIL}</text>
+
+    <!-- Data Rows -->
+    {format_row("Subject", config.NAME, 170, val_color="#ffffff")}
+    {format_row("Role", config.ROLE, 195, val_color="#CBD5E1")}
+    {format_row("Origin", config.LOCATION, 220, val_color="#CBD5E1")}
+    {format_row("Education", config.EDUCATION, 245, val_color="#CBD5E1")}
+    {format_row("Status", "Building + Learning + Shipping", 270, val_color="{config.UI_LIGHT}")}
+    {format_row("ToolChain", config.TOOLCHAIN, 295, val_color="#CBD5E1")}
+    
+    <text x="500" y="335" class="title" style="fill: {config.ACCENT}">-----------</text>
+    
+    {format_row("Core.Lang", config.LANGUAGES, 360, val_color="#ffffff")}
+    {format_row("Core.Frontend", config.FRONTEND, 385, val_color="#CBD5E1")}
+    {format_row("Core.Backend", config.BACKEND, 410, val_color="#CBD5E1")}
+    {format_row("Core.Database", config.DATABASE, 435, val_color="#CBD5E1")}
+    {format_row("Core.Infra", config.INFRA, 460, val_color="#CBD5E1")}
+    
+    <text x="500" y="500" class="mono" fill="#94A3B8">- Contact -</text>
+    
+    {format_row("Grid.Mail", config.EMAIL, 530, val_color="#ffffff")}
+    {format_row("Grid.Portfolio", config.PORTFOLIO.replace("https://", ""), 555, val_color="#CBD5E1")}
+    {format_row("Grid.LinkedIn", config.LINKEDIN.split("in/")[1].strip("/"), 580, val_color="#CBD5E1")}
+
+    <text x="500" y="615" class="title" style="fill: #6B7280">▶ More about me &amp; projects below in README ↓ <rect x="0" y="-10" width="8" height="12" fill="{config.ACCENT}"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/></rect></text>
 
     <!-- Portrait Animation Layer -->
-    <g transform="translate({portrait_x}, {portrait_y})" fill="url(#portraitGrad)" shape-rendering="crispEdges">
+    <g transform="translate(42, 92)" fill="url(#portraitGrad)" shape-rendering="crispEdges">
         <!-- Intro fade-in -->
         {intro_svg}
         
@@ -534,8 +551,6 @@ def compose_banner(portrait_pts, portrait_width, portrait_height):
         {traveller_svg}
     </g>
     
-    <!-- Edge Overlay for blending -->
-    <rect x="{portrait_x}" y="{portrait_y}" width="{portrait_width}" height="{portrait_height}" fill="url(#grid)" opacity="0.3" pointer-events="none" />
 </svg>
 '''
 
