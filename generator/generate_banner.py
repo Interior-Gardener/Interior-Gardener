@@ -2,9 +2,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image
-
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+import random
 import config
+import animation_engine
 
 
 # ============================================================
@@ -22,6 +23,11 @@ PROCESSED_OUTPUT = DATA_DIR / "portrait_processed.png"
 MASK_OUTPUT = DATA_DIR / "portrait_mask.png"
 DITHER_OUTPUT = DATA_DIR / "portrait_dither.png"
 SVG_OUTPUT = DATA_DIR / "portrait_dither.svg"
+
+OUTPUT_DIR = ROOT / "output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+BANNER_OUTPUT = OUTPUT_DIR / "banner.svg"
+
 
 
 # ============================================================
@@ -299,54 +305,27 @@ def save_dither(gray_dither):
 
 
 # ============================================================
-# CREATE SVG DOT PORTRAIT
+# CREATE SVG DOT PORTRAIT & BANNER
 # ============================================================
 
-def create_svg(gray_dither, mask):
-    """
-    Convert the dithered image into an SVG made from circles.
-
-    Only black dither pixels inside the subject mask
-    become SVG dots.
-    """
-
+def generate_dots(gray_dither, mask):
     height, width = gray_dither.shape
-
-    circles = []
-
-    for y in range(
-        0,
-        height,
-        DOT_SPACING,
-    ):
-        for x in range(
-            0,
-            width,
-            DOT_SPACING,
-        ):
-
-            # Outside subject -> no dot.
+    pts = []
+    
+    for y in range(0, height, DOT_SPACING):
+        for x in range(0, width, DOT_SPACING):
             if mask[y, x] < 80:
                 continue
-
-            # White pixel -> no dot.
             if gray_dither[y, x] >= 128:
                 continue
+            pts.append([x, y])
+            
+    return np.array(pts, dtype=np.float32), width, height
 
-            # Slightly vary dot radius based on darkness.
-            #
-            # This gives the final SVG a richer visual texture.
-            local_value = gray_dither[y, x]
-
-            radius = DOT_RADIUS
-
-            if local_value < 40:
-                radius *= 1.15
-
-            circles.append(
-                f'<circle cx="{x}" cy="{y}" '
-                f'r="{radius:.2f}" />'
-            )
+def create_svg(pts, width, height):
+    circles = []
+    for x, y in pts:
+        circles.append(f'<circle cx="{x}" cy="{y}" r="{DOT_RADIUS:.2f}" />')
 
     svg = f'''<svg
     xmlns="http://www.w3.org/2000/svg"
@@ -368,21 +347,200 @@ def create_svg(gray_dither, mask):
     </g>
 </svg>
 '''
+    SVG_OUTPUT.write_text(svg, encoding="utf-8")
+    print(f"Saved SVG portrait: {SVG_OUTPUT}")
+    print(f"SVG dots generated: {len(pts):,}")
 
-    SVG_OUTPUT.write_text(
-        svg,
-        encoding="utf-8",
-    )
 
-    print(
-        f"Saved SVG portrait: "
-        f"{SVG_OUTPUT}"
-    )
+def compose_banner(portrait_pts, portrait_width, portrait_height):
+    """
+    Compose the final premium portfolio hero banner.
+    """
+    print("Generating final animated banner SVG...")
+    
+    w = config.BANNER_WIDTH
+    h = config.BANNER_HEIGHT
+    
+    # Portrait placement: align to the right and bottom
+    portrait_x = w - portrait_width - 80
+    portrait_y = h - portrait_height
 
-    print(
-        f"SVG dots generated: "
-        f"{len(circles):,}"
-    )
+    # Calculate optimal transport and bands
+    logo_paths = [
+        ROOT / "assets" / "react-logo.webp",
+        ROOT / "assets" / "node-logo.webp",
+        ROOT / "assets" / "mongodb-logo.webp"
+    ]
+    
+    # Travellers
+    routes = animation_engine.compute_traveller_routes(portrait_pts, logo_paths, portrait_width, portrait_height, 900)
+    
+    # Drift bands
+    # Remove traveller dots from portrait points to avoid overlap? The PDF suggests they are independent.
+    logo_center = (portrait_width / 2, portrait_height / 2)
+    bands = animation_engine.compute_drift_bands(portrait_pts, logo_center, 94)
+    
+    # Intro layer: random groups
+    intro_groups = []
+    shuffled_pts = portrait_pts.copy()
+    np.random.shuffle(shuffled_pts)
+    group_size = len(shuffled_pts) // 60
+    for i in range(60):
+        intro_groups.append(shuffled_pts[i*group_size:(i+1)*group_size])
+
+    # Let's generate the SVG contents!
+    
+    # 1. Intro Layer
+    intro_svg = ""
+    for i, grp in enumerate(intro_groups):
+        delay = random.uniform(0, 2.0)
+        dots = "".join([f'<circle cx="{x}" cy="{y}" r="{DOT_RADIUS:.2f}"/>' for x, y in grp])
+        intro_svg += f'<g opacity="0"><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.5;0.99;1" dur="3.2s" begin="{delay}s" fill="freeze" />{dots}</g>'
+        
+    # 2. Loop Layer (Drift Bands)
+    # Loop duration: 13.9s, begin: 3.2s
+    # Keytimes: 0.000;0.194;0.288;0.432;0.525;0.669;0.763;0.906;1.000
+    loop_svg = ""
+    for b in bands:
+        dx, dy = b['dx'], b['dy']
+        dots = "".join([f'<circle cx="{x}" cy="{y}" r="{DOT_RADIUS:.2f}"/>' for x, y in b['pts']])
+        loop_svg += f'''
+        <g display="none">
+            <set attributeName="display" to="inline" begin="3.2s" />
+            <animate attributeName="opacity" values="1;1;0;0;0;0;0;0;1" keyTimes="0.000;0.194;0.288;0.432;0.525;0.669;0.763;0.906;1.000" dur="13.9s" begin="3.2s" repeatCount="indefinite"/>
+            <animateTransform attributeName="transform" type="translate" values="0 0;0 0;{dx:.1f} {dy:.1f};{dx:.1f} {dy:.1f};{dx:.1f} {dy:.1f};{dx:.1f} {dy:.1f};{dx:.1f} {dy:.1f};{dx:.1f} {dy:.1f};0 0" keyTimes="0.000;0.194;0.288;0.432;0.525;0.669;0.763;0.906;1.000" dur="13.9s" begin="3.2s" repeatCount="indefinite"/>
+            {dots}
+        </g>'''
+        
+    # 3. Traveller Layer
+    traveller_svg = ""
+    if routes:
+        P0, L1, L2, L3 = routes
+        for i in range(len(P0)):
+            p0x, p0y = P0[i]
+            l1x, l1y = L1[i]
+            l2x, l2y = L2[i]
+            l3x, l3y = L3[i]
+            
+            traveller_svg += f'''
+            <use href="#traveller" x="0" y="0" opacity="0">
+                <animate attributeName="opacity" values="0;0;1;1;1;1;1;1;0" keyTimes="0.000;0.194;0.288;0.432;0.525;0.669;0.763;0.906;1.000" dur="13.9s" begin="3.2s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="{p0x:.1f} {p0y:.1f};{p0x:.1f} {p0y:.1f};{l1x:.1f} {l1y:.1f};{l1x:.1f} {l1y:.1f};{l2x:.1f} {l2y:.1f};{l2x:.1f} {l2y:.1f};{l3x:.1f} {l3y:.1f};{l3x:.1f} {l3y:.1f};{p0x:.1f} {p0y:.1f}" keyTimes="0.000;0.194;0.288;0.432;0.525;0.669;0.763;0.906;1.000" dur="13.9s" begin="3.2s" repeatCount="indefinite"/>
+            </use>'''
+
+    # We will build the SVG contents step-by-step for a technical, modern look.
+    
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">
+    <defs>
+        <linearGradient id="portraitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="{config.PORTRAIT_LIGHT}" />
+            <stop offset="100%" stop-color="{config.PORTRAIT_DARK}" />
+        </linearGradient>
+        
+        <linearGradient id="uiGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="{config.UI_LIGHT}" />
+            <stop offset="100%" stop-color="{config.UI_DARK}" />
+        </linearGradient>
+
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1"/>
+        </pattern>
+        
+        <circle id="traveller" cx="0" cy="0" r="{DOT_RADIUS * 1.3:.2f}" fill="url(#portraitGrad)" />
+        
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap');
+            .name {{
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 72px;
+                font-weight: 900;
+                fill: #ffffff;
+                letter-spacing: -2px;
+            }}
+            .role {{
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 32px;
+                font-weight: 500;
+                fill: url(#uiGrad);
+                letter-spacing: -0.5px;
+            }}
+            .status {{
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 18px;
+                font-weight: 300;
+                fill: #94A3B8;
+                letter-spacing: 0px;
+            }}
+            .section-title {{
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 13px;
+                font-weight: 700;
+                fill: {config.ACCENT};
+                text-transform: uppercase;
+                letter-spacing: 2px;
+            }}
+            .tech-text {{
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 14px;
+                font-weight: 400;
+                fill: #CBD5E1;
+            }}
+            .decorative-line {{
+                stroke: {config.ACCENT};
+                stroke-width: 2;
+                stroke-dasharray: 4 4;
+            }}
+        </style>
+    </defs>
+
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="{config.BACKGROUND}" />
+    <rect width="100%" height="100%" fill="url(#grid)" />
+
+    <!-- Technical Decorative Elements -->
+    <circle cx="80" cy="80" r="4" fill="{config.ACCENT}" />
+    <line x1="80" y1="80" x2="80" y2="120" class="decorative-line" />
+    <path d="M 80 120 L 100 140 L 140 140" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+
+    <!-- Typography Content -->
+    <g transform="translate(80, 240)">
+        <text x="0" y="0" class="name">{config.NAME}</text>
+        <text x="0" y="50" class="role">{config.ROLE}</text>
+        <text x="0" y="90" class="status">{config.STATUS}</text>
+    </g>
+    
+    <g transform="translate(80, 420)">
+        <text x="0" y="0" class="section-title">01 // TOOLCHAIN</text>
+        <text x="0" y="30" class="tech-text">{config.TOOLCHAIN}</text>
+        
+        <text x="0" y="70" class="section-title">02 // LANGUAGES</text>
+        <text x="0" y="100" class="tech-text">{config.LANGUAGES}</text>
+    </g>
+    
+    <g transform="translate(600, 420)">
+        <text x="0" y="0" class="section-title">03 // INFRA</text>
+        <text x="0" y="30" class="tech-text">{config.INFRA}</text>
+    </g>
+
+    <!-- Portrait Animation Layer -->
+    <g transform="translate({portrait_x}, {portrait_y})" fill="url(#portraitGrad)" shape-rendering="crispEdges">
+        <!-- Intro fade-in -->
+        {intro_svg}
+        
+        <!-- Continuous Loop Drift -->
+        {loop_svg}
+        
+        <!-- morphing travellers -->
+        {traveller_svg}
+    </g>
+    
+    <!-- Edge Overlay for blending -->
+    <rect x="{portrait_x}" y="{portrait_y}" width="{portrait_width}" height="{portrait_height}" fill="url(#grid)" opacity="0.3" pointer-events="none" />
+</svg>
+'''
+
+    BANNER_OUTPUT.write_text(svg, encoding="utf-8")
+    print(f"Saved Final Banner SVG: {BANNER_OUTPUT}")
 
 
 # ============================================================
@@ -458,11 +616,12 @@ def process_portrait():
     # 8. Save dither PNG.
     save_dither(dither)
 
-    # 9. Generate SVG.
-    create_svg(
-        dither,
-        resized_mask,
-    )
+    # 9. Generate SVG portrait.
+    pts, p_width, p_height = generate_dots(dither, resized_mask)
+    create_svg(pts, p_width, p_height)
+
+    # 10. Compose Final Animated Banner
+    compose_banner(pts, p_width, p_height)
 
     print()
     print("=" * 60)
