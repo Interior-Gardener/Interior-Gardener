@@ -119,22 +119,26 @@ def run():
     # 21s - 23s: Particle fades out, Photo fades in
     # 23s - 24s: Hold Photo
     
-    # Keytimes
+    # Keytimes for the movement
     kt = [
-        "0",           # 0s
-        "0.208",       # 5s
-        "0.291",       # 7s
-        "0.375",       # 9s
-        "0.458",       # 11s
-        "0.541",       # 13s
-        "0.625",       # 15s
-        "0.708",       # 17s
-        "0.791",       # 19s
-        "1"            # 24s
+        "0",           # 0s: P0
+        "0.208",       # 5s: start move
+        "0.291",       # 7s: L1
+        "0.375",       # 9s: hold L1
+        "0.458",       # 11s: L2
+        "0.541",       # 13s: hold L2
+        "0.625",       # 15s: L3
+        "0.708",       # 17s: hold L3
+        "0.791",       # 19s: P0
+        "1"            # 24s: hold P0
     ]
     kt_str = ";".join(kt)
     
     hero_circles = ""
+    react_color = "#22D3EE"
+    node_color = "#27C93F"
+    mongo_color = "#10B981"
+
     for i in range(num_hero):
         p0 = routes[0][i]
         l1 = routes[1][i]
@@ -142,9 +146,7 @@ def run():
         l3 = routes[3][i]
         color = hero_dots[i]['fill']
         
-        # Original scaled coord for circle starting point
         sx, sy = hero_pts[i]
-        # Distances to translate
         dx1 = l1[0] - sx; dy1 = l1[1] - sy
         dx2 = l2[0] - sx; dy2 = l2[1] - sy
         dx3 = l3[0] - sx; dy3 = l3[1] - sy
@@ -163,9 +165,15 @@ def run():
         ]
         val_str = ";".join(vals)
         
+        colors = [
+            color, color, react_color, react_color, node_color, node_color, mongo_color, mongo_color, color, color
+        ]
+        col_str = ";".join(colors)
+        
         hero_circles += f'''
         <circle cx="{sx:.1f}" cy="{sy:.1f}" r="{1.5*scale:.1f}" fill="{color}">
             <animateTransform attributeName="transform" type="translate" values="{val_str}" keyTimes="{kt_str}" dur="24s" repeatCount="indefinite" />
+            <animate attributeName="fill" values="{col_str}" keyTimes="{kt_str}" dur="24s" repeatCount="indefinite" />
         </circle>
         '''
         
@@ -230,15 +238,15 @@ def run():
     </image>
 
     <!-- SVG Particle Background Layer -->
+    <!-- Opacity fades in from 3-5s, fades out from 5-7s, stays out until 17s, fades in 17-19s, holds until 21s, fades out 21-23s -->
     <g opacity="0">
-        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.125;0.208;0.875;0.958;1" dur="24s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0;0;1;0;0;1;1;0;0" keyTimes="0;0.125;0.208;0.291;0.708;0.791;0.875;0.958;1" dur="24s" repeatCount="indefinite" />
         <g transform="translate({tx:.2f}, {ty:.2f}) scale({scale:.4f})">
             {static_paths_str}
         </g>
     </g>
     
     <!-- Flying Hero Particles -->
-    <!-- They appear simultaneously with the static SVG particles -->
     <g opacity="0">
         <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.125;0.208;0.875;0.958;1" dur="24s" repeatCount="indefinite" />
         {hero_circles}
