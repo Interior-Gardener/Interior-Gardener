@@ -286,7 +286,7 @@ Machine Learning • Computer Vision • MediaPipe
 
 | ☕ Coffee | 🌙 Late Nights | 💻 Favorite Language | 🏸 Off-Screen | 🚀 Dream |
 |:---:|:---:|:---:|:---:|:---:|
-| Infinite | Too Many | Python | Squash & Chess | Build products used by millions |
+| Infinite | Too Many | JavaScript | Squash & Chess | Build products used by millions |
 
 </div>
 
