@@ -1,8 +1,8 @@
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./output/banner.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./output/banner.svg">
-  <img alt="Kartik Verma" src="./output/banner.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./output/banner.svg?v=2">
+  <source media="(prefers-color-scheme: light)" srcset="./output/banner.svg?v=2">
+  <img alt="Kartik Verma" src="./output/banner.svg?v=2">
 </picture>
 </div>
 
