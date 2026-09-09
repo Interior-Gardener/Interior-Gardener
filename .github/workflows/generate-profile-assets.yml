@@ -91,6 +91,7 @@ jobs:
           echo "Static assets successfully generated."
         env:
           PAT_1: ${{ secrets.STATS_TOKEN }}
+          PAT_2: ${{ github.token }}
 
       - name: Push to Output Branch
         uses: crazy-max/ghaction-github-pages@v4
