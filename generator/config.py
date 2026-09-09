@@ -32,6 +32,7 @@ INFRA = "AWS · Docker · Render · Vercel"
 LINKEDIN = "https://www.linkedin.com/in/kartikverma2204/"
 EMAIL = "kartikverma2204@gmail.com"
 PORTFOLIO = "https://kartik-verma.onrender.com/"
+GITHUB = "github.com/Interior-Gardener"
 
 # ---------- Animation Timeline (in seconds) ----------
 TIMING = {
@@ -53,3 +54,43 @@ PARTICLES = {
 # ---------- Default Palette ----------
 # The 5 base portrait colors (from light to dark)
 PORTRAIT_COLORS = ["#22D3EE", "#38BDF8", "#A78BFA", "#8B5CF6", "#7C3AED"]
+
+# ---------- Logo Brand Colors ----------
+# Auto-extraction picks the most *frequent* hex in an SVG, which is often the
+# wrong one: MongoDB's grey wordmark beats its green leaf, AWS's near-black
+# #252F3E beats its orange, and stroke-only marks (Express) carry no hex at all.
+# Anything listed here wins; everything else falls back to auto-extraction,
+# which now prefers vivid colors and lifts them clear of the dark background.
+LOGO_BRAND_COLORS = {
+    "01-javascript": "#F7DF1E",
+    "02-java":       "#E76F00",
+    "03-react":      "#61DAFB",
+    "04-nodejs":     "#68C15A",
+    "05-express":    "#E2E8F0",
+    "06-mongodb":    "#00ED64",
+    "07-mysql":      "#00A0C6",
+    "08-oracle":     "#F80000",
+    "09-docker":     "#2496ED",
+    "10-aws":        "#FF9900",
+}
+
+# Caption shown under the portrait while each logo is held.
+LOGO_LABELS = {
+    "01-javascript": "JAVASCRIPT",
+    "02-java":       "JAVA",
+    "03-react":      "REACT.JS",
+    "04-nodejs":     "NODE.JS",
+    "05-express":    "EXPRESS.JS",
+    "06-mongodb":    "MONGODB",
+    "07-mysql":      "MYSQL",
+    "08-oracle":     "ORACLE DB",
+    "09-docker":     "DOCKER",
+    "10-aws":        "AWS",
+}
+
+# Caption shown while the particles hold the portrait.
+PORTRAIT_LABEL = "KARTIK VERMA"
+
+# Minimum relative luminance (0-255) a particle color may have against
+# BACKGROUND. Brand colors darker than this get lifted until they read.
+MIN_PARTICLE_LUMA = 96

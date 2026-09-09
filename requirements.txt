@@ -5,3 +5,4 @@ scipy
 mediapipe
 cairosvg
 lxml
+opensimplex

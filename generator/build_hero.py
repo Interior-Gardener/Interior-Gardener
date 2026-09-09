@@ -31,42 +31,73 @@ def hex_to_rgb(hex_color):
 def rgb_to_hex(r, g, b):
     return "#{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
 
+def relative_luma(hex_color):
+    r, g, b = hex_to_rgb(hex_color)
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+def saturation(hex_color):
+    r, g, b = hex_to_rgb(hex_color)
+    mx, mn = max(r, g, b), min(r, g, b)
+    return 0.0 if mx == 0 else (mx - mn) / mx
+
+def lift_to_min_luma(hex_color, min_luma):
+    """Blend a color toward white until it clears the background."""
+    luma = relative_luma(hex_color)
+    if luma >= min_luma or luma >= 255:
+        return hex_color
+    t = (min_luma - luma) / (255.0 - luma)
+    r, g, b = hex_to_rgb(hex_color)
+    return rgb_to_hex(r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t)
+
+def pick_dominant_color(svg_path):
+    """
+    Pick the color a human would call 'the brand color' of this mark.
+
+    Frequency alone is a poor signal: MongoDB's grey wordmark outnumbers its
+    green leaf and AWS's near-black outnumbers its orange. So vivid colors are
+    preferred over greys, and frequency only breaks ties among vivid ones.
+    An explicit entry in config.LOGO_BRAND_COLORS always wins.
+    """
+    override = config.LOGO_BRAND_COLORS.get(svg_path.stem)
+    if override:
+        return override
+
+    content = svg_path.read_text(encoding='utf-8')
+    hex_colors = []
+    for m in re.findall(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b', content):
+        if len(m) == 4:
+            m = '#' + m[1] * 2 + m[2] * 2 + m[3] * 2
+        hex_colors.append(m.upper())
+
+    if not hex_colors:
+        return None
+
+    counter = Counter(hex_colors)
+    vivid = [(c, n) for c, n in counter.items() if saturation(c) >= 0.25]
+    pool = vivid if vivid else list(counter.items())
+    # Most frequent first, then most saturated, then brightest.
+    pool.sort(key=lambda cn: (cn[1], saturation(cn[0]), relative_luma(cn[0])), reverse=True)
+    return pool[0][0]
+
 def extract_logo_palette(svg_path, num_tones=5):
     """
-    Auto-discovers the dominant color of an SVG and generates a 5-tone palette.
+    Build the 5-tone particle ramp for one logo.
+
+    Tones run dark -> light around the brand color, and every tone is then
+    lifted above config.MIN_PARTICLE_LUMA so no bucket of particles vanishes
+    into the near-black banner background.
     """
     try:
-        content = svg_path.read_text(encoding='utf-8')
-        # Find all hex colors
-        matches = re.findall(r'#[0-9a-fA-F]{3,6}', content)
-        if not matches:
+        dominant = pick_dominant_color(svg_path)
+        if not dominant:
             return config.PORTRAIT_COLORS
-            
-        # Normalize to 6 chars
-        hex_colors = []
-        for m in matches:
-            if len(m) == 4:
-                m = '#' + m[1]*2 + m[2]*2 + m[3]*2
-            hex_colors.append(m.upper())
-            
-        counter = Counter(hex_colors)
-        # Exclude black and white if possible, unless it's the only color
-        valid = [c for c in counter.most_common() if c[0] not in ('#000000', '#FFFFFF', '#FFF', '#000')]
-        if valid:
-            dominant = valid[0][0]
-        else:
-            dominant = counter.most_common(1)[0][0]
-            
-        # Generate 5 tones based on dominant
+
         r, g, b = hex_to_rgb(dominant)
         palette = []
         for i in range(num_tones):
-            # Vary brightness by -40% to +40%
-            factor = 0.6 + (i / (max(1, num_tones - 1))) * 0.8
-            nr = min(255, r * factor)
-            ng = min(255, g * factor)
-            nb = min(255, b * factor)
-            palette.append(rgb_to_hex(nr, ng, nb))
+            factor = 0.6 + (i / max(1, num_tones - 1)) * 0.8
+            tone = rgb_to_hex(min(255, r * factor), min(255, g * factor), min(255, b * factor))
+            palette.append(lift_to_min_luma(tone, config.MIN_PARTICLE_LUMA))
         return palette
     except Exception as e:
         print(f"Warning: color extraction failed for {svg_path}: {e}")
@@ -176,6 +207,7 @@ def run():
     timeline_photo = []      # (time, opacity)
     timeline_static = []     # (time, opacity)
     timeline_hero_op = []    # (time, opacity)
+    label_windows = []       # (text, color, t_on, t_off)
     
     t = 0.0
     # A. CLEAN PORTRAIT HOLD
@@ -203,6 +235,8 @@ def run():
     timeline_photo.append((t, 0))
     timeline_static.append((t, 1))
     timeline_hero_op.append((t, 1))
+    label_windows.append((config.PORTRAIT_LABEL, config.PORTRAIT_COLORS[0],
+                          t - dur["particle_portrait_hold"], t))
     
     # Logos Iteration
     for i in range(len(valid_logos)):
@@ -229,6 +263,11 @@ def run():
         timeline_photo.append((t, 0))
         timeline_static.append((t, 0))
         timeline_hero_op.append((t, 1))
+
+        # Caption fades in as the particles land and holds with the logo.
+        stem = valid_logos[i].stem
+        label = config.LOGO_LABELS.get(stem, stem.split("-")[-1].upper())
+        label_windows.append((label, palettes[i + 1][2], end_t - 0.4, t))
         
     # N -> B: FINAL LOGO TO PORTRAIT
     start_t = t
@@ -250,6 +289,8 @@ def run():
     timeline_photo.append((t, 0))
     timeline_static.append((t, 1))
     timeline_hero_op.append((t, 1))
+    label_windows.append((config.PORTRAIT_LABEL, config.PORTRAIT_COLORS[0],
+                          t - dur["particle_portrait_hold"], t))
     
     # B -> A: RECONSTRUCT
     t += dur["reconstruct"]
@@ -290,6 +331,26 @@ def run():
         val = ";".join([str(op) for time, op in timeline])
         return kt, val
         
+    def label_track(t_on, t_off, fade=0.35):
+        """Full-cycle opacity keyframes that show a caption only in its window."""
+        raw = [(0.0, 0), (t_on - fade, 0), (t_on, 1),
+               (t_off, 1), (t_off + fade, 0), (total_dur, 0)]
+        pts = []
+        for tt, op in raw:
+            tt = min(max(tt, 0.0), total_dur)
+            if pts and tt <= pts[-1][0]:
+                pts[-1] = (pts[-1][0], op)
+            else:
+                pts.append((tt, op))
+        return (";".join(f"{tt / total_dur:.4f}" for tt, _ in pts),
+                ";".join(str(op) for _, op in pts))
+
+    label_elements = ""
+    for text, color, t_on, t_off in label_windows:
+        kt, vals = label_track(t_on, t_off)
+        label_elements += f'''
+    <text x="440" y="72" text-anchor="end" fill="{color}" font-size="13" letter-spacing="3" opacity="0">{text}<animate attributeName="opacity" values="{vals}" keyTimes="{kt}" dur="{total_dur}s" repeatCount="indefinite" /></text>'''
+
     photo_kt, photo_val = format_op(timeline_photo)
     static_kt, static_val = format_op(timeline_static)
     hero_kt, hero_val = format_op(timeline_hero_op)
@@ -316,10 +377,17 @@ def run():
             <feGaussianBlur stdDeviation="4" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M40 0H0V40" fill="none" stroke="#22D3EE" stroke-width="1" opacity="0.045" />
+        </pattern>
+        <clipPath id="frameClip">
+            <rect x="2" y="2" width="1176" height="606" rx="14" />
+        </clipPath>
     </defs>
 
     <!-- Background -->
     <rect width="1180" height="610" fill="{config.BACKGROUND}" />
+    <rect width="1180" height="610" fill="url(#grid)" clip-path="url(#frameClip)" />
     
     <!-- Outer Window Frame -->
     <rect x="2" y="2" width="1176" height="606" rx="14" fill="none" stroke="#22D3EE" stroke-width="2" opacity="0.4" filter="url(#glow)" />
@@ -332,13 +400,17 @@ def run():
     <circle cx="44" cy="23" r="6" fill="#FFBD2E" />
     <circle cx="64" cy="23" r="6" fill="#27C93F" />
     <text x="590" y="27" fill="#64748B" font-size="12" text-anchor="middle">{config.EMAIL} - ./profile.sh --hero</text>
+    <circle cx="1104" cy="23" r="4" fill="#22D3EE">
+        <animate attributeName="opacity" values="1;0.2;1" dur="2.4s" repeatCount="indefinite" />
+    </circle>
+    <text x="1118" y="27" fill="#22D3EE" font-size="11" letter-spacing="2">LIVE</text>
 
     <!-- Left Box (Portrait area) -->
-    <text x="40" y="72" class="title" fill="#64748B">VISUAL.MAP</text>
+    <text x="40" y="72" class="title" fill="#64748B">VISUAL.MAP</text>{label_elements}
     <rect x="40" y="85" width="400" height="490" rx="8" fill="#070B16" stroke="rgba(34,211,238,0.2)" />
 
     <!-- Photo Layer -->
-    <image x="40" y="85" width="400" height="490" href="data:image/png;base64,{photo_b64}" preserveAspectRatio="xMidYMid slice" filter="url(#photoBlur)">
+    <image x="40" y="85" width="400" height="490" href="data:image/jpeg;base64,{photo_b64}" preserveAspectRatio="xMidYMid slice" filter="url(#photoBlur)">
         <animate attributeName="opacity" values="{photo_val}" keyTimes="{photo_kt}" dur="{total_dur}s" repeatCount="indefinite" />
     </image>
 
@@ -355,28 +427,30 @@ def run():
     </g>
 
     <!-- Right Box (Info area) -->
-    <text x="500" y="100" class="title">SYSTEM.INFO</text>
-    <line x1="590" y1="96" x2="1140" y2="96" stroke="rgba(255,255,255,0.1)" />
-    
-    <text x="500" y="140" class="label">Name ........... <tspan class="val">{config.NAME}</tspan></text>
-    <text x="500" y="170" class="label">Role ........... <tspan class="val">{config.ROLE}</tspan></text>
-    <text x="500" y="200" class="label">Location ....... <tspan class="val">{config.LOCATION}</tspan></text>
-    <text x="500" y="230" class="label">Education ...... <tspan class="val">{config.EDUCATION}</tspan></text>
-    
-    <text x="500" y="280" class="title">STACK.INFO</text>
-    <line x1="590" y1="276" x2="1140" y2="276" stroke="rgba(255,255,255,0.1)" />
-    
-    <text x="500" y="320" class="label">Core.Lang ...... <tspan class="val">{config.LANGUAGES}</tspan></text>
-    <text x="500" y="350" class="label">Core.Front ..... <tspan class="val">{config.FRONTEND}</tspan></text>
-    <text x="500" y="380" class="label">Core.Back ...... <tspan class="val">{config.BACKEND}</tspan></text>
-    <text x="500" y="410" class="label">Core.Data ...... <tspan class="val">{config.DATABASE}</tspan></text>
-    <text x="500" y="440" class="label">Core.Infra ..... <tspan class="val">{config.INFRA}</tspan></text>
-    
-    <text x="500" y="490" class="title">NETWORK.INFO</text>
-    <line x1="600" y1="486" x2="1140" y2="486" stroke="rgba(255,255,255,0.1)" />
-    
-    <text x="500" y="530" class="label">Email .......... <tspan class="val">{config.EMAIL}</tspan></text>
-    <text x="500" y="560" class="label">Portfolio ...... <tspan class="val">{config.PORTFOLIO.replace("https://", "")}</tspan></text>
+    <text x="500" y="96" class="title">SYSTEM.INFO</text>
+    <line x1="612" y1="92" x2="1140" y2="92" stroke="rgba(255,255,255,0.1)" />
+
+    <text x="500" y="132" class="label">Name ........... <tspan class="val">{config.NAME}</tspan></text>
+    <text x="500" y="160" class="label">Role ........... <tspan class="val">{config.ROLE}</tspan></text>
+    <text x="500" y="188" class="label">Location ....... <tspan class="val">{config.LOCATION}</tspan></text>
+    <text x="500" y="216" class="label">Education ...... <tspan class="val">{config.EDUCATION}</tspan></text>
+
+    <text x="500" y="262" class="title">STACK.INFO</text>
+    <line x1="600" y1="258" x2="1140" y2="258" stroke="rgba(255,255,255,0.1)" />
+
+    <text x="500" y="298" class="label">Core.Lang ...... <tspan class="val">{config.LANGUAGES}</tspan></text>
+    <text x="500" y="326" class="label">Core.Front ..... <tspan class="val">{config.FRONTEND}</tspan></text>
+    <text x="500" y="354" class="label">Core.Back ...... <tspan class="val">{config.BACKEND}</tspan></text>
+    <text x="500" y="382" class="label">Core.Data ...... <tspan class="val">{config.DATABASE}</tspan></text>
+    <text x="500" y="410" class="label">Core.Infra ..... <tspan class="val">{config.INFRA}</tspan></text>
+
+    <text x="500" y="456" class="title">NETWORK.INFO</text>
+    <line x1="624" y1="452" x2="1140" y2="452" stroke="rgba(255,255,255,0.1)" />
+
+    <text x="500" y="492" class="label">Email .......... <tspan class="val">{config.EMAIL}</tspan></text>
+    <text x="500" y="520" class="label">Portfolio ...... <tspan class="val">{config.PORTFOLIO.replace("https://", "").rstrip("/")}</tspan></text>
+    <text x="500" y="548" class="label">GitHub ......... <tspan class="val">{config.GITHUB}</tspan></text>
+    <text x="500" y="576" class="label">LinkedIn ....... <tspan class="val">linkedin.com/in/{config.LINKEDIN.split("in/")[1].strip("/")}</tspan></text>
 </svg>
 '''
 
