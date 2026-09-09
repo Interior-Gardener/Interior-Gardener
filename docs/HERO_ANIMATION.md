@@ -29,13 +29,41 @@ Instead of relying on heavy runtime JavaScript/Canvas (which GitHub README block
 The entire animation timeline, particle settings, and paths are controlled by a single file: `generator/config.py`.
 
 ### Adding a new logo:
-1. Simply drop any valid SVG file into `assets/logos/`.
+1. Drop a valid SVG into `assets/logos/`, named `NN-slug.svg` (the engine processes them in filename order).
 2. The engine will **automatically discover** it.
-3. The engine reads the SVG, calculates its most dominant color to generate a custom 5-tone brand palette, and computes the particle flow.
+3. Add `"NN-slug"` to `LOGO_BRAND_COLORS` and `LOGO_LABELS` in `generator/config.py`.
+
+### The one hard rule: the alpha mask *is* the logo
+
+Particle targets are sampled from the SVG's rendered **alpha channel**, not from its
+colors. Any logo drawn on an opaque background rectangle therefore rasterises to a
+solid block, and the particles form a featureless square instead of the mark.
+
+> This is exactly what happened to the original JavaScript badge: it is a full-bleed
+> `<rect fill="#f7df1e">` with the letters knocked out in black, so it rendered at
+> 100% alpha coverage. `assets/logos/01-javascript.svg` now draws the badge as a
+> stroked frame plus filled letterforms, which leaves the background transparent.
+
+Before adding a logo, check its coverage — anything at or near `1.000` is a solid block:
+
+```bash
+node generator/svg2png.js assets/logos/NN-slug.svg /tmp/check.png
+python -c "import numpy as np;from PIL import Image;print((np.array(Image.open('/tmp/check.png').convert('RGBA'))[:,:,3]>127).mean())"
+```
+
+Healthy marks in this set land between `0.08` and `0.42`.
+
+### Colors
+
+`LOGO_BRAND_COLORS` in `generator/config.py` is the source of truth. Auto-extraction is
+only a fallback, and it picks the most *frequent* hex in the file — which is often the
+wrong one (MongoDB's grey wordmark outvotes its green leaf; AWS's near-black `#252F3E`
+outvotes its orange). Every tone is finally lifted above `MIN_PARTICLE_LUMA` so no
+bucket of particles disappears into the near-black background.
 
 ### Removing or Reordering logos:
-- To remove: delete the SVG from `assets/logos/`.
-- To reorder: rename the SVG files (the engine processes them in alphabetical order).
+- To remove: delete the SVG from `assets/logos/` and its two `config.py` entries.
+- To reorder: renumber the filename prefixes.
 
 ### Changing Timings:
 In `generator/config.py`, modify the `TIMING` dictionary:
