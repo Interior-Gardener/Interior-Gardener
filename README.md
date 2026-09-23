@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://kartik-verma.onrender.com/">
+  <a href="https://kartikverma.pages.dev/">
     <img src="./output/banner.svg?v=3" width="100%" alt="Kartik Verma — Full-Stack Developer, Mumbai India" />
   </a>
 </div>
@@ -7,7 +7,7 @@
 <div align="center">
   <a href="https://www.linkedin.com/in/kartikverma2204/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" /></a>
   <a href="mailto:kartikverma2204@gmail.com"><img src="https://img.shields.io/badge/Email-EA4335?style=for-the-badge&logo=gmail&logoColor=white" alt="Email" /></a>
-  <a href="https://kartik-verma.onrender.com/"><img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" /></a>
+  <a href="https://kartikverma.pages.dev/"><img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio" /></a>
   <a href="https://github.com/Interior-Gardener?tab=followers"><img src="https://img.shields.io/github/followers/Interior-Gardener?style=for-the-badge&color=22D3EE&labelColor=0A101F&logo=github&logoColor=white&label=Followers" alt="Followers" /></a>
   <img src="https://komarev.com/ghpvc/?username=Interior-Gardener&style=for-the-badge&color=22D3EE&label=PROFILE+VIEWS" alt="Profile views" />
 </div>
@@ -333,6 +333,6 @@ The banner is a pre-computed particle simulation — see <a href="./docs/HERO_AN
 
 ### ⭐ Always learning. Always building. Always improving.
 
-**[Portfolio](https://kartik-verma.onrender.com/)** &nbsp;·&nbsp; **[LinkedIn](https://www.linkedin.com/in/kartikverma2204/)** &nbsp;·&nbsp; **[Email](mailto:kartikverma2204@gmail.com)**
+**[Portfolio](https://kartikverma.pages.dev/)** &nbsp;·&nbsp; **[LinkedIn](https://www.linkedin.com/in/kartikverma2204/)** &nbsp;·&nbsp; **[Email](mailto:kartikverma2204@gmail.com)**
 
 </div>
